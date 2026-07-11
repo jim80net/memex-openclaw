@@ -74,6 +74,40 @@
         },
         "description": "Directories to scan for memory .md files (## sections with optional Triggers: lines)"
       },
+      "sync": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Shared-origin rules projection (memex-core plan/apply). Default off.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "When true, project origin rules/*.md as symlinks into ~/.openclaw/rules"
+          },
+          "repoDir": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Origin root override; empty/null uses resolveOriginRoot default chain (~/.memex, XDG, legacy-claude)"
+          },
+          "repo": {
+            "type": "string",
+            "default": "",
+            "description": "Optional git remote for origin"
+          },
+          "autoPull": {
+            "type": "boolean",
+            "default": false,
+            "description": "Pull origin remote on service start when repo is set"
+          },
+          "autoCommitPush": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
       "types": {
         "type": "array",
         "items": {
@@ -126,6 +160,9 @@
     },
     "memoryDirs": {
       "label": "Memory directories to scan (.md files)"
+    },
+    "sync": {
+      "label": "Shared-origin rules projection (sync profile)"
     },
     "types": {
       "label": "Knowledge types to route"

@@ -160,14 +160,29 @@ All settings live under `plugins.entries.memex-openclaw.config` in your OpenClaw
 | `cacheTimeMs` | `300000` | Index rebuild interval (ms) |
 | `skillDirs` | `[]` | Additional directories to scan for skills |
 | `memoryDirs` | `[]` | Directories to scan for memory `.md` files |
+| `sync.enabled` | `false` | Project origin `rules/*.md` as symlinks into `~/.openclaw/rules` |
+| `sync.repoDir` | `null` | Origin root override; default uses core `resolveOriginRoot` (`~/.memex` / XDG / legacy-claude) |
+| `sync.repo` | `""` | Optional git remote for origin |
+| `sync.autoPull` | `false` | Pull origin on gateway service start when `repo` is set |
 | `types` | all | Knowledge types to route |
+
+### Shared-origin rules projection
+
+When `sync.enabled` is true, service start (and `pnpm project-rules`) uses `@jim80net/memex-core` `planProjection` / `applyProjection` to symlink origin rules into `~/.openclaw/rules` (absolute links, fail-closed — never clobbers real files). The index scans that harness dir only (not raw origin) so each rule is counted once. Delivery remains graduated inject via hooks — file-shaped corpus first.
+
+```bash
+# Offline dry-run / dogfood (no gateway required)
+pnpm project-rules -- --dry-run
+pnpm project-rules -- --strict
+```
 
 ## Architecture
 
-- **`@jim80net/memex-core`** — Shared engine: embeddings (ONNX + OpenAI), skill index, cache, session tracking, telemetry, traces
-- **`src/config.ts`** — OpenClaw-specific config resolution extending `MemexCoreConfig`
+- **`@jim80net/memex-core`** — Shared engine: embeddings, skill index, origin projection, cache, session, telemetry, traces
+- **`src/config.ts`** — OpenClaw-specific config + optional `sync` profile
+- **`src/paths.ts`** / **`src/projection.ts`** / **`src/scan-dirs.ts`** — harness paths + shared-origin projection
 - **`src/router.ts`** — Graduated disclosure logic (rules, memories, skills)
-- **`src/index.ts`** — Plugin entry point: constructs core objects, registers hooks
+- **`src/index.ts`** — Plugin entry: projection on service start, hooks, index build
 - **`src/prompt-extractor.ts`** — Strips OpenClaw/Discord envelope metadata
 
 ## Features

@@ -1,6 +1,4 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
-import type { EmbeddingProvider, Logger, ScanDirs } from "@jim80net/memex-core";
+import type { EmbeddingProvider, Logger } from "@jim80net/memex-core";
 import {
   InMemorySessionTracker,
   LocalEmbeddingProvider,
@@ -9,34 +7,12 @@ import {
   TraceAccumulator,
 } from "@jim80net/memex-core";
 import manifest from "../openclaw.plugin.json" with { type: "json" };
-import type { SkillRouterConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
+import { getOpenClawPaths } from "./paths.ts";
+import { runOpenClawProjection } from "./projection.ts";
 import type { HookContext, HookEvent } from "./router.ts";
 import { createRouter } from "./router.ts";
-
-// ---------------------------------------------------------------------------
-// OpenClaw-specific paths
-// ---------------------------------------------------------------------------
-
-const OPENCLAW_DIR = join(homedir(), ".openclaw");
-const CACHE_DIR = join(OPENCLAW_DIR, "cache");
-const CACHE_PATH = join(CACHE_DIR, "skill-router.json");
-const TELEMETRY_PATH = join(CACHE_DIR, "skill-router-telemetry.json");
-const TRACES_DIR = join(CACHE_DIR, "skill-router-traces");
-const MODELS_DIR = join(CACHE_DIR, "models");
-const MANAGED_SKILLS_DIR = join(OPENCLAW_DIR, "workspace", "skills");
-
-// ---------------------------------------------------------------------------
-// ScanDirs builder
-// ---------------------------------------------------------------------------
-
-function buildScanDirs(workspaceDir: string, config: SkillRouterConfig): ScanDirs {
-  return {
-    skillDirs: [join(workspaceDir, "skills"), MANAGED_SKILLS_DIR, ...config.skillDirs],
-    memoryDirs: [...config.memoryDirs],
-    ruleDirs: [],
-  };
-}
+import { buildScanDirs } from "./scan-dirs.ts";
 
 // ---------------------------------------------------------------------------
 // OpenClaw plugin API types
@@ -129,149 +105,197 @@ function buildToolQuery(toolName: string, toolInput?: Record<string, unknown>): 
 }
 
 // ---------------------------------------------------------------------------
+// Health / projection summary logs (doctor equivalent for plugin)
+// ---------------------------------------------------------------------------
+
+function logProjectionHealth(
+  logger: Logger,
+  report: Awaited<ReturnType<typeof runOpenClawProjection>>,
+): void {
+  if (!report.profileSet) {
+    logger.info("Memex[health]: rules-projection idle (sync.enabled=false)");
+    logger.info(
+      "Memex[health]: memory-surface = file-shaped corpus + graduated inject (before_prompt_build), not MCP tools",
+    );
+    return;
+  }
+  if (report.origin) {
+    const src = report.origin.source;
+    const legacyLike = src === "legacy-claude" || src === "xdg";
+    logger.info(
+      `Memex[health]: shared-origin ${report.origin.exists ? "present" : "missing"} at ${report.origin.root} (source=${src})${legacyLike ? " — product default is ~/.memex; migrate is opt-in only" : ""}`,
+    );
+  }
+  logger.info(`Memex[health]: rules-projection ${report.message}`);
+  if (report.apply && report.apply.conflicts.length > 0) {
+    const sample = report.apply.conflicts
+      .slice(0, 3)
+      .map((c) => `${c.targetPath} (${c.reason})`)
+      .join("; ");
+    logger.warn(
+      `Memex[health]: ${report.apply.conflicts.length} conflict(s) — real files not clobbered: ${sample}`,
+    );
+  }
+  logger.info(
+    "Memex[health]: memory-surface = file-shaped corpus + graduated inject (before_prompt_build), not MCP tools",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Plugin entry point
 // ---------------------------------------------------------------------------
 
 export default function register(api: OpenClawPluginApi): void {
   const config = resolveConfig(api.pluginConfig);
+  const paths = getOpenClawPaths();
 
-  if (!config.enabled) {
+  if (!config.enabled && !config.sync.enabled) {
     api.logger.info("Memex disabled");
     return;
   }
 
-  // Create embedding provider (local ONNX by default, zero API cost)
-  let provider: EmbeddingProvider;
-  if (config.embeddingBackend === "openai") {
-    const apiKey = process.env.OPENAI_API_KEY ?? "";
-    if (!apiKey) {
-      api.logger.warn(
-        "Memex: openai backend selected but no OPENAI_API_KEY, falling back to local",
-      );
-      provider = new LocalEmbeddingProvider(config.embeddingModel, MODELS_DIR);
+  // Create embedding provider only when router inject is enabled
+  let provider: EmbeddingProvider | null = null;
+  let index: SkillIndex | null = null;
+  let sessionTracker: InMemorySessionTracker | null = null;
+  let traceAccumulator: TraceAccumulator | null = null;
+
+  if (config.enabled) {
+    if (config.embeddingBackend === "openai") {
+      const apiKey = process.env.OPENAI_API_KEY ?? "";
+      if (!apiKey) {
+        api.logger.warn(
+          "Memex: openai backend selected but no OPENAI_API_KEY, falling back to local",
+        );
+        provider = new LocalEmbeddingProvider(config.embeddingModel, paths.modelsDir);
+      } else {
+        provider = new OpenAIEmbeddingProvider(config.embeddingModel, apiKey);
+        api.logger.info(`Memex: using OpenAI embeddings (${config.embeddingModel})`);
+      }
     } else {
-      provider = new OpenAIEmbeddingProvider(config.embeddingModel, apiKey);
-      api.logger.info(`Memex: using OpenAI embeddings (${config.embeddingModel})`);
-    }
-  } else {
-    provider = new LocalEmbeddingProvider(config.embeddingModel, MODELS_DIR);
-    api.logger.info(`Memex: using local ONNX embeddings (${config.embeddingModel})`);
-  }
-
-  const index = new SkillIndex(config, provider, CACHE_PATH);
-  const sessionTracker = new InMemorySessionTracker();
-  const traceAccumulator = new TraceAccumulator(TRACES_DIR);
-  const router = createRouter(index, config, api.logger, sessionTracker, {
-    traceAccumulator,
-    telemetryPath: TELEMETRY_PATH,
-    buildScanDirs: (workspaceDir) => buildScanDirs(workspaceDir, config),
-  });
-
-  // --- Hook: before_prompt_build ---
-  // Main hook: semantic skill routing per-turn
-  api.on("before_prompt_build", async (event: unknown, context: unknown) => {
-    return router(event as HookEvent, context as HookContext);
-  });
-
-  // --- Hook: before_tool_call ---
-  // Inject tool-specific guidance when a tool is about to fire
-  api.on("before_tool_call", async (event: unknown, context: unknown) => {
-    const toolEvent = event as ToolCallEvent;
-    const toolContext = context as ToolCallContext;
-    const toolName = toolEvent.toolName;
-    if (!toolName) return undefined;
-
-    // Record tool call in trace
-    const sessionKey = toolContext.sessionKey ?? toolEvent.sessionKey ?? "";
-    if (sessionKey) {
-      traceAccumulator.recordToolCall(sessionKey, toolName);
+      provider = new LocalEmbeddingProvider(config.embeddingModel, paths.modelsDir);
+      api.logger.info(`Memex: using local ONNX embeddings (${config.embeddingModel})`);
     }
 
-    // Only search for tool-guidance type skills
-    if (!config.enabled || !index.skillCount) return undefined;
+    // 3-arg SkillIndex — no portable-location registry (design §1.6 no silent skew)
+    index = new SkillIndex(config, provider, paths.cachePath);
+    sessionTracker = new InMemorySessionTracker();
+    traceAccumulator = new TraceAccumulator(paths.tracesDir);
+    const router = createRouter(index, config, api.logger, sessionTracker, {
+      traceAccumulator,
+      telemetryPath: paths.telemetryPath,
+      buildScanDirs: (workspaceDir) => buildScanDirs(workspaceDir, config, paths),
+    });
 
-    const query = buildToolQuery(toolName, toolEvent.toolInput);
+    // --- Hook: before_prompt_build ---
+    api.on("before_prompt_build", async (event: unknown, context: unknown) => {
+      return router(event as HookEvent, context as HookContext);
+    });
 
-    try {
-      const results = await index.search(
-        query,
-        2, // Max 2 tool guidances per call
-        config.threshold + 0.1, // Higher threshold for tool guidance (less noise)
-        ["tool-guidance"],
-      );
+    // --- Hook: before_tool_call ---
+    api.on("before_tool_call", async (event: unknown, context: unknown) => {
+      const toolEvent = event as ToolCallEvent;
+      const toolContext = context as ToolCallContext;
+      const toolName = toolEvent.toolName;
+      if (!toolName) return undefined;
 
-      if (results.length === 0) return undefined;
+      const sessionKey = toolContext.sessionKey ?? toolEvent.sessionKey ?? "";
+      if (sessionKey && traceAccumulator) {
+        traceAccumulator.recordToolCall(sessionKey, toolName);
+      }
 
-      let totalChars = 0;
-      const sections: string[] = [];
+      if (!config.enabled || !index?.skillCount) return undefined;
 
-      for (const result of results) {
-        let content: string;
-        try {
-          content = await index.readSkillContent(result.skill.location);
-        } catch {
-          continue;
+      const query = buildToolQuery(toolName, toolEvent.toolInput);
+
+      try {
+        const results = await index.search(query, 2, config.threshold + 0.1, ["tool-guidance"]);
+
+        if (results.length === 0) return undefined;
+
+        let totalChars = 0;
+        const sections: string[] = [];
+
+        for (const result of results) {
+          let content: string;
+          try {
+            content = await index.readSkillContent(result.skill.location);
+          } catch {
+            continue;
+          }
+
+          if (totalChars + content.length > 4000) break;
+
+          sections.push(
+            `## Tool Guidance: ${result.skill.name} (relevance: ${(result.score * 100).toFixed(0)}%)\n\n${content}`,
+          );
+          totalChars += content.length;
         }
 
-        if (totalChars + content.length > 4000) break;
+        if (sections.length === 0) return undefined;
 
-        sections.push(
-          `## Tool Guidance: ${result.skill.name} (relevance: ${(result.score * 100).toFixed(0)}%)\n\n${content}`,
-        );
-        totalChars += content.length;
-      }
-
-      if (sections.length === 0) return undefined;
-
-      api.logger.info(
-        `Memex[tool]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)`,
-      );
-
-      return { prependContext: sections.join("\n\n---\n\n") };
-    } catch (err) {
-      api.logger.warn(`Memex[tool]: search failed: ${err}`);
-      return undefined;
-    }
-  });
-
-  // --- Hook: agent_end ---
-  // Capture execution traces for GEPA-style evolution
-  api.on("agent_end", async (event: unknown) => {
-    const endEvent = event as AgentEndEvent;
-    const sessionKey = endEvent.sessionKey ?? "";
-    if (!sessionKey) return;
-
-    if (endEvent.messageCount) {
-      traceAccumulator.recordMessageCount(sessionKey, endEvent.messageCount);
-    }
-
-    const outcome = endEvent.error
-      ? "error"
-      : endEvent.outcome === "timeout"
-        ? "timeout"
-        : "completed";
-
-    try {
-      const trace = await traceAccumulator.finalize(sessionKey, outcome, endEvent.error);
-      if (trace && trace.skillsInjected.length > 0) {
         api.logger.info(
-          `Memex[trace]: ${sessionKey} — ${trace.outcome}, skills=[${trace.skillsInjected.join(",")}], tools=${trace.toolsCalled.length}, msgs=${trace.messageCount}`,
+          `Memex[tool]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)`,
         );
-      }
-    } catch (err) {
-      api.logger.warn(`Memex[trace]: failed to finalize: ${err}`);
-    }
-  });
 
-  // --- Service: index builder ---
+        return { prependContext: sections.join("\n\n---\n\n") };
+      } catch (err) {
+        api.logger.warn(`Memex[tool]: search failed: ${err}`);
+        return undefined;
+      }
+    });
+
+    // --- Hook: agent_end ---
+    api.on("agent_end", async (event: unknown) => {
+      const endEvent = event as AgentEndEvent;
+      const sessionKey = endEvent.sessionKey ?? "";
+      if (!sessionKey || !traceAccumulator) return;
+
+      if (endEvent.messageCount) {
+        traceAccumulator.recordMessageCount(sessionKey, endEvent.messageCount);
+      }
+
+      const outcome = endEvent.error
+        ? "error"
+        : endEvent.outcome === "timeout"
+          ? "timeout"
+          : "completed";
+
+      try {
+        const trace = await traceAccumulator.finalize(sessionKey, outcome, endEvent.error);
+        if (trace && trace.skillsInjected.length > 0) {
+          api.logger.info(
+            `Memex[trace]: ${sessionKey} — ${trace.outcome}, skills=[${trace.skillsInjected.join(",")}], tools=${trace.toolsCalled.length}, msgs=${trace.messageCount}`,
+          );
+        }
+      } catch (err) {
+        api.logger.warn(`Memex[trace]: failed to finalize: ${err}`);
+      }
+    });
+  }
+
+  // --- Service: projection + index builder ---
   api.registerService({
     id: "memex-openclaw-index",
     start: async () => {
       const workspaceDir = api.config?.workspace?.dir;
-      if (workspaceDir) {
+
+      // Projection first when profile set (idempotent; fail-closed no-clobber)
+      try {
+        const report = await runOpenClawProjection({
+          config,
+          workspaceDir,
+          paths,
+        });
+        logProjectionHealth(api.logger, report);
+      } catch (err) {
+        api.logger.warn(`Memex: projection failed: ${err}`);
+      }
+
+      if (config.enabled && index && workspaceDir) {
         api.logger.info("Memex: building initial index...");
         try {
-          await index.build(buildScanDirs(workspaceDir, config));
+          await index.build(buildScanDirs(workspaceDir, config, paths));
           api.logger.info(`Memex: indexed ${index.skillCount} skills`);
         } catch (err) {
           api.logger.warn(`Memex: failed to build initial index: ${err}`);
@@ -284,17 +308,32 @@ export default function register(api: OpenClawPluginApi): void {
   });
 
   // Periodic cleanup of stale trace and session entries (every 30 min)
-  const cleanupInterval = setInterval(() => {
-    traceAccumulator.cleanup();
-    sessionTracker.cleanup();
-  }, 1800_000);
+  if (traceAccumulator && sessionTracker) {
+    const ta = traceAccumulator;
+    const st = sessionTracker;
+    const cleanupInterval = setInterval(() => {
+      ta.cleanup();
+      st.cleanup();
+    }, 1800_000);
 
-  // Unref so it doesn't prevent process exit
-  if (typeof cleanupInterval === "object" && "unref" in cleanupInterval) {
-    (cleanupInterval as NodeJS.Timeout).unref();
+    if (typeof cleanupInterval === "object" && "unref" in cleanupInterval) {
+      (cleanupInterval as NodeJS.Timeout).unref();
+    }
   }
 
   api.logger.info(
-    `Memex v${manifest.version}: registered (before_prompt_build + before_tool_call + agent_end hooks)`,
+    `Memex v${manifest.version}: registered (enabled=${config.enabled} sync.enabled=${config.sync.enabled})`,
   );
 }
+
+export type { SkillRouterConfig } from "./config.ts";
+export { DEFAULT_CONFIG, resolveConfig } from "./config.ts";
+export { getOpenClawPaths } from "./paths.ts";
+export {
+  buildOpenClawProjectionTargets,
+  isProjectionProfileSet,
+  rulesProjectionActive,
+  runOpenClawProjection,
+} from "./projection.ts";
+// Re-export for offline scripts / tests
+export { buildScanDirs } from "./scan-dirs.ts";

@@ -1,15 +1,26 @@
 # memex-openclaw addendum — G3 adapter alignment (file-shaped rules via shared-origin)
 
 **Date:** 2026-07-11  
-**Status:** design only — **do not implement** until gated by **memex** (flotilla XO)  
-**Authority:** product steer `flotilla-dispatch-c29001c1` · G3 brief `adapter-alignment-g3-2026-07-11.md`  
-**Pin (impl, post-gate):** `@jim80net/memex-core@^0.6.0` (npm freeze LIVE; this package is still on `^0.3.1` at design time)  
+**Status:** design **GATED** (memex merged #16) — **impl in progress** on `feat/g3-projection-core-0.6`  
+**Design PR:** https://github.com/jim80net/memex-openclaw/pull/16 (merged)  
+**Authority:** product steer `flotilla-dispatch-c29001c1` · CoS AUTHORIZE wave 2026-07-11 · G3 brief `adapter-alignment-g3-2026-07-11.md`  
+**Pin (impl, post-gate):** `@jim80net/memex-core@^0.6.0` (npm freeze LIVE; this package is still on `^0.3.1` at design time — **largest seat jump in the pin matrix**)  
 **Proven path:** memex-grok#30 design + #31 impl (`src/core/projection.ts`)  
 **Parent flotilla briefs:**  
 - `memex-flotilla/briefs/file-rules-shared-origin-2026-07-10.md`  
-- `memex-flotilla/briefs/adapter-alignment-g3-2026-07-11.md`  
+- `memex-flotilla/briefs/adapter-alignment-g3-2026-07-11.md` (CoS scope + pin matrix)  
 **Core peer:** memex-core `design/shared-origin-sync-profile.md` + shipped `src/origin.ts`  
 **Scope:** memex-openclaw only. Author ≠ merger; surface PR to **memex** for gate.
+
+### CoS-locked wave scope (acceptance)
+
+| Track | Requirement | OpenClaw plan |
+|-------|-------------|----------------|
+| **A. Core pin** | `@jim80net/memex-core@^0.6.0`; tests green; no silent skew | Impl PR bumps pin; full `pnpm check`; call out 0.3.1→0.6.0 surface (§1.6) |
+| **B. File-shaped projection** | Rules (skills where supported) via core plan/apply into **real harness dirs**; prefer files over inject; no invented inject paths | Project origin `rules/*.md` → `~/.openclaw/rules`; wire `ruleDirs`; keep existing inject as delivery for *indexed* files — not a new inject path |
+| **C. `~/.memex` migrate** | **Opt-in only** if it unblocks A/B; default keep current origins (legacy-claude OK via resolver) | **No migrate in v1.** `resolveOriginRoot()` only; never call `migrateOriginToDefault` unless a later opt-in flag is design-gated |
+
+**Non-goals (wave):** codex-memex-dev cutover · freelancing · live-injection renaissance · freeze-SHA from this seat · self-merge.
 
 ---
 
@@ -21,7 +32,7 @@ Unlike Grok, memex-openclaw is an **OpenClaw plugin** (hooks + service), not a s
 
 Unlike Grok, this tree **has no pre-existing rules directory scan**. Skills are the only hard-coded corpus roots. v1 therefore (a) projects origin `rules/*.md` into **memex-managed rule dirs under the verified OpenClaw home/workspace**, and (b) wires those dirs into core `ScanDirs.ruleDirs` so the existing index path can see them — without double-scanning origin.
 
-**Memory surface stays what this adapter already is:** semantic **inject via** `before_prompt_build` / `before_tool_call` when the plugin is enabled. Do **not** reframe OpenClaw as MCP-primary or invent a new inject-first product. Grok’s “memory = tools you call” messaging does **not** transplant; OpenClaw health messaging must say: *memory/rules/skills = indexed corpus + graduated inject* (existing design).
+**Prefer files over inject (CoS B):** rules become real files (symlinks) under the harness before index/inject. Existing `before_prompt_build` / `before_tool_call` remain the **delivery** of already-indexed corpus — not a new inject surface and not inject-as-primary for corpus placement. Do **not** invent MCP-only memory for OpenClaw. Health messaging: *memory/rules/skills = file-shaped corpus + graduated inject of matches* (honest for this harness).
 
 ---
 
@@ -88,6 +99,42 @@ On the design host, `~/.openclaw` exists with agent workspaces (e.g. `workspace-
 | `@jim80net/memex-core` | `^0.3.1` | `^0.6.0` |
 | Origin / projection API | not consumed | `resolveOriginRoot`, `planProjection`, `applyProjection` |
 | CLI / doctor | none | optional script + service health logs (see §7) |
+
+### 1.6 Pin jump `^0.3.1` → `^0.6.0` (largest in wave) — breakages & skew
+
+Wave pin matrix calls this seat out explicitly. Audit of **this package’s actual imports/call sites** against current memex-core main (0.6 surface):
+
+#### What we consume today
+
+| Import / call | Site | 0.6 status |
+|---------------|------|------------|
+| `MemexCoreConfig`, `SkillType`, `DEFAULT_CORE_CONFIG` | `src/config.ts` | **Stable** — same fields openclaw spreads/overrides; core still has `enabled`, scoring, dirs |
+| `SkillIndex(config, provider, CACHE_PATH)` | `src/index.ts` | **Compatible** — optional 4th `SkillIndexOptions` (portable-location registry); omit → absolute paths as today |
+| `LocalEmbeddingProvider(model, MODELS_DIR)` / `OpenAIEmbeddingProvider` | `src/index.ts` | **Stable** |
+| `InMemorySessionTracker`, `TraceAccumulator` | `src/index.ts` | **Stable** |
+| `ScanDirs` `{ skillDirs, memoryDirs, ruleDirs }` | `src/index.ts` | **Stable** shape; we finally **use** `ruleDirs` post-projection |
+| `loadTelemetry` / `recordMatch` / `saveTelemetry` | `src/router.ts` | **Stable** (0.3 GEPA family still present; 0.5+ additive) |
+| Types: `IndexedSkill`, `Logger`, `SessionTracker`, `SkillSearchResult` | router + tests | **Stable** for mocked test surface |
+
+#### Additive core releases (no intentional openclaw consumer yet)
+
+| Core | What shipped | OpenClaw impact if pin-only |
+|------|--------------|-----------------------------|
+| **0.4.0** | sync case-insensitive project IDs + migration | **None** — openclaw does not call sync/project mapping today |
+| **0.5.0** | portable location handles at index time (`SkillIndexOptions.registry`) | **None if we omit registry** — keep absolute cache keys; do **not** silently enable registry without a design decision (would skew cache identity) |
+| **0.6.0** | origin + `planProjection` / `applyProjection` / migrate helpers | **New code only** — projection module; migrate APIs **not** called by default (CoS C) |
+
+#### Explicit non-breakage commitments for impl
+
+1. **No silent portable-location enablement** on pin bump — `new SkillIndex(config, provider, CACHE_PATH)` stays 3-arg unless a follow-on design enables registry.  
+2. **No silent `~/.memex` migrate** — do not call `migrateOriginToDefault` / `installLegacyOriginCompatSymlink` in v1 paths.  
+3. **Cache file** `~/.openclaw/cache/skill-router.json` may re-embed on first build after pin if core cache schema differs — acceptable; not a behavioral fork. If CI shows schema hard-fail, document and wipe-or-migrate cache path in impl PR only.  
+4. **Tests** mock `SkillIndex` heavily — pin bump risk is mainly **typecheck** + any runtime export rename (none expected for listed imports).  
+5. **Largest-jump residual risk:** transitive optional `@huggingface/transformers` / Node types — fixed by green `pnpm check` on impl PR, not by design speculation.
+
+#### Impl sequencing preference
+
+Prefer **one impl PR** after design gate: pin `^0.6.0` + projection + scan/health + tests. Split only if pin-alone fails typecheck/tests and needs a hotfix first (then file intentional lag issue per CoS A — not expected).
 
 ---
 
@@ -225,7 +272,8 @@ Optional fields (names aligned with core / Grok bridge):
 
 1. `config.sync.repoDir` if non-empty → `resolveOriginRoot({ root })`  
 2. else `resolveOriginRoot()` (env `MEMEX_ORIGIN` → `~/.memex` → XDG → legacy-claude → default)  
-3. **Do not** invent an OpenClaw-private origin under `~/.openclaw/…` for corpus storage.
+3. **Do not** invent an OpenClaw-private origin under `~/.openclaw/…` for corpus storage.  
+4. **CoS C — migrate opt-in only:** v1 never auto-migrates. Legacy-claude / XDG origins remain valid via resolver. A future `sync.migrateToDefaultOrigin: true` (name TBD) would be a separate design-gated flag with reversibility notes — **out of this wave default**.
 
 ### 5.3 Interaction with `enabled`
 
@@ -415,8 +463,10 @@ No dedicated “openclaw-research” flotilla desk is bound in hierarchy for thi
 | Inventing non-harness paths | Anchor under verified `OPENCLAW_DIR` / `workspaceDir`; document as memex-managed |
 | Double-index | Profile-gated `ruleDirs`; never scan raw origin rules |
 | Gateway start writes surprise | `sync.enabled` default false |
-| Core 0.3→0.6 breakage | Isolated pin bump PR acceptable if types force it; prefer single impl PR after design gate |
-| Operators expect Grok-style MCP memory copy | Health message explicitly describes inject surface |
+| Core 0.3→0.6 breakage (largest jump) | §1.6 audit; single impl PR preferred; split only if pin-alone fails |
+| Silent portable-location / cache skew | Keep 3-arg `SkillIndex`; no registry without design |
+| Accidental `~/.memex` migrate | CoS C: never call migrate helpers in v1 defaults |
+| Operators expect Grok-style MCP memory copy | Health message: file corpus + graduated inject (this harness) |
 | No live OpenClaw desk in flotilla | Manual verify checklist + unit tests as gate bar |
 | Clobber user files in `~/.openclaw/rules` | core fail-closed; never ship copy fallback |
 
@@ -430,17 +480,21 @@ No dedicated “openclaw-research” flotilla desk is bound in hierarchy for thi
 - After gate: authorize impl against `@jim80net/memex-core@^0.6.0`.  
 - Merge authority remains with memex (author ≠ merger).
 
-### ## Backlog
+### ## Backlog (LIVE wave — not standby)
 
 | Marker | Item | Owner |
 |--------|------|-------|
-| `[blocked] settle: design-gate` | Impl blocked until this design is gated by memex. | memex |
-| `[blocked] settle: impl-after-design-gate` | No projection code / core pin bump until design gate. | memex-openclaw |
+| `[live] settle: design-pr-16` | Design PR #16 open + CoS scope/pin-jump sections; await memex gate. | memex (gate) / memex-openclaw (author) |
+| `[live] settle: impl-after-design-gate` | **After gate:** pin `^0.6.0` + projection + scan/health + tests → impl PR → memex gate. | memex-openclaw |
+| `[live] settle: pin-A-tests-green` | Track A: no silent skew; `pnpm check` green on 0.6; residual cache/type issues called out in impl PR. | memex-openclaw |
+| `[live] settle: projection-B-files` | Track B: file-shaped rules via core plan/apply into `~/.openclaw/rules`; no new inject paths. | memex-openclaw |
+| `[live] settle: migrate-C-opt-in-only` | Track C: default resolver-only; no mass `~/.memex` migrate. | memex-openclaw |
 | `[follow-on] settle: skills-projection` | Project origin `skills/` → `MANAGED_SKILLS_DIR` via `entryKind: "skill-dirs"`. | memex-openclaw |
 | `[follow-on] settle: workspace-rules-scope` | Optional project-scoped origin rules → `workspaceDir/rules` without double-index. | memex-openclaw |
 | `[follow-on] settle: doctor-cli-parity` | Optional `pnpm doctor` mirroring Grok check names. | memex-openclaw |
 | `[non-goal] settle: inject-first` | Do not redesign delivery as inject-first product or MCP-primary. | — |
 | `[non-goal] settle: origin-fork` | Do not invent OpenClaw-private origin corpus layout. | — |
+| `[non-goal] settle: self-merge-freeze` | No self-merge; no freeze-SHA; no codex-memex-dev cutover. | — |
 
 ---
 
