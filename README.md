@@ -174,7 +174,14 @@ When `sync.enabled` is true, service start (and `pnpm project-rules`) uses `@jim
 # Offline dry-run / dogfood (no gateway required)
 pnpm project-rules -- --dry-run
 pnpm project-rules -- --strict
+
+# Operator-readable preflight report (safe: no files changed)
+pnpm project-rules -- --dry-run --report
 ```
+
+The report mode summarizes readiness, origin selection, planned links, and fail-closed
+conflicts as Markdown. It is suitable for a change ticket or demo capture and keeps the
+default concise CLI output unchanged.
 
 ## Architecture
 

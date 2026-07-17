@@ -3,7 +3,7 @@
  * Offline rules projection for OpenClaw (dogfood / CI).
  *
  * Usage:
- *   node scripts/project-rules.mjs [--dry-run] [--strict]
+ *   node scripts/project-rules.mjs [--dry-run] [--strict] [--report]
  *
  * Reads MEMEX_OPENCLAW_SYNC_JSON or defaults to sync.enabled=true with
  * resolveOriginRoot defaults. Does not require the OpenClaw gateway.
@@ -20,6 +20,7 @@ const root = join(__dirname, "..");
 // else expect dist. Prefer dynamic import of source under Node 22+.
 const dryRun = process.argv.includes("--dry-run");
 const strict = process.argv.includes("--strict");
+const reportMode = process.argv.includes("--report");
 
 async function loadProjection() {
   try {
@@ -45,10 +46,19 @@ async function loadPaths() {
   }
 }
 
+async function loadReportFormatter() {
+  try {
+    return await import(pathToFileURL(join(root, "src/projection-report.ts")).href);
+  } catch {
+    return await import(pathToFileURL(join(root, "src/projection-report.js")).href);
+  }
+}
+
 async function main() {
   const { runOpenClawProjection } = await loadProjection();
   const { DEFAULT_CONFIG } = await loadConfig();
   const { getOpenClawPaths } = await loadPaths();
+  const { formatProjectionReport } = await loadReportFormatter();
 
   let syncOverride = {};
   if (process.env.MEMEX_OPENCLAW_SYNC_JSON) {
@@ -71,8 +81,12 @@ async function main() {
     dryRun,
   });
 
-  console.log(report.message);
-  if (report.apply?.conflicts?.length) {
+  if (reportMode) {
+    console.log(formatProjectionReport(report, { dryRun }));
+  } else {
+    console.log(report.message);
+  }
+  if (!reportMode && report.apply?.conflicts?.length) {
     for (const c of report.apply.conflicts) {
       console.warn(`conflict: ${c.targetPath} (${c.reason})`);
     }
