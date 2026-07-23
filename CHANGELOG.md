@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/jim80net/memex-openclaw/compare/v0.7.0...v0.8.0) (2026-07-23)
+
+
+### Features
+
+* add operator-readable rules projection preflight ([abbab07](https://github.com/jim80net/memex-openclaw/commit/abbab07f375ad86acd479ac373f4985fb172bfdc))
+* add rules projection preflight report ([d90b768](https://github.com/jim80net/memex-openclaw/commit/d90b76814a4b94d8541351b94b529af4970e970b))
+* G3 projection + pin memex-core ^0.6.0 ([#17](https://github.com/jim80net/memex-openclaw/issues/17)) ([99f6d05](https://github.com/jim80net/memex-openclaw/commit/99f6d052fbed16ba17d995e18291206533045298))
+
+
+### Bug Fixes
+
+* secure Core 0.7.1 runtime graph ([#22](https://github.com/jim80net/memex-openclaw/issues/22)) ([9936638](https://github.com/jim80net/memex-openclaw/commit/993663870e2bd96da20ec2ebdb8ae8f52b24bc43))
+
 ## [0.7.0](https://github.com/jim80net/memex-openclaw/compare/v0.6.0...v0.7.0) (2026-03-17)
 
 
