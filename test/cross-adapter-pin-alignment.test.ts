@@ -2,8 +2,6 @@
 // This proves declared range + installed resolution match the published Core contract.
 
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -54,26 +52,32 @@ describe("cross-adapter version-pin alignment (G3 openclaw)", () => {
       expect(installed.version).toBe(CROSS_ADAPTER_MEMEX_CORE_RESOLVED);
     });
 
-    it("openclaw's transformers range equals the INSTALLED memex-core's range", () => {
+    it("the adapter bundles patched Core and Transformers manifests", () => {
       const corePkg = readJson("node_modules/@jim80net/memex-core/package.json");
-      const coreRange = depRange(corePkg, "@huggingface/transformers");
-      expect(coreRange, "@huggingface/transformers missing from memex-core pkg").toBeDefined();
-      expect(depRange(openclawPkg, "@huggingface/transformers")).toBe(coreRange);
+      const transformersPkg = readJson("node_modules/@huggingface/transformers/package.json");
+      expect(depRange(corePkg, "@huggingface/transformers")).toBeUndefined();
+      expect(depRange(transformersPkg, "sharp")).toBeUndefined();
+      expect(openclawPkg.bundleDependencies).toEqual([
+        "@huggingface/transformers",
+        "@jim80net/memex-core",
+      ]);
+      const pnpmConfig = openclawPkg.pnpm as
+        | {
+            patchedDependencies?: Record<string, string>;
+          }
+        | undefined;
+      expect(pnpmConfig?.patchedDependencies).toEqual({
+        "@huggingface/transformers@3.8.1": "patches/@huggingface__transformers@3.8.1.patch",
+        "@jim80net/memex-core@0.7.1": "patches/@jim80net__memex-core@0.7.1.patch",
+      });
     });
 
-    it("the application override resolves Transformers to safe Sharp", () => {
-      const pnpmConfig = openclawPkg.pnpm as { overrides?: Record<string, string> } | undefined;
-      expect(pnpmConfig?.overrides?.["@huggingface/transformers>sharp"]).toBe(SAFE_SHARP_RESOLVED);
-
-      const transformersPackageUrl = new URL(
-        "../node_modules/@huggingface/transformers/package.json",
-        import.meta.url,
-      );
-      const requireFromTransformers = createRequire(transformersPackageUrl);
-      const sharpEntry = requireFromTransformers.resolve("sharp");
-      const sharpPkg = JSON.parse(
-        readFileSync(join(dirname(sharpEntry), "..", "package.json"), "utf-8"),
-      ) as Record<string, unknown>;
+    it("the application directly owns the safe Sharp runtime", () => {
+      expect(depRange(openclawPkg, "sharp")).toBe(SAFE_SHARP_RESOLVED);
+      expect(depRange(openclawPkg, "@huggingface/jinja")).toBe("^0.5.3");
+      expect(depRange(openclawPkg, "onnxruntime-node")).toBe("1.21.0");
+      expect(depRange(openclawPkg, "onnxruntime-web")).toBe("1.22.0-dev.20250409-89f8206ba4");
+      const sharpPkg = readJson("node_modules/sharp/package.json");
       expect(sharpPkg.version).toBe(SAFE_SHARP_RESOLVED);
     });
   });

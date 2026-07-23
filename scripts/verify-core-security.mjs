@@ -10,8 +10,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CORE_VERSION = "0.7.1";
 const TRANSFORMERS_VERSION = "3.8.1";
 const SAFE_SHARP_VERSION = "0.35.3";
-const SAFE_TAR_VERSION = "7.5.21";
-const SAFE_PROTOBUFJS_VERSION = "7.6.5";
 const MODEL = "Xenova/all-MiniLM-L6-v2";
 const MODEL_CACHE =
   process.env.MEMEX_MODEL_CACHE_DIR ?? join(homedir(), ".cache", "memex-openclaw-models");
@@ -37,10 +35,8 @@ function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function installedPackageVersion(root, packageName) {
-  const manifest = JSON.parse(
-    readFileSync(join(root, "node_modules", packageName, "package.json"), "utf8"),
-  );
+function installedPackageVersion(root, ...packagePath) {
+  const manifest = JSON.parse(readFileSync(join(root, ...packagePath, "package.json"), "utf8"));
   return manifest.version;
 }
 
@@ -160,11 +156,6 @@ function verifySafePackedRuntime(tempRoot, tarball) {
     dependencies: {
       "@jim80net/memex-openclaw": `file:${tarball}`,
     },
-    overrides: {
-      sharp: SAFE_SHARP_VERSION,
-      tar: SAFE_TAR_VERSION,
-      protobufjs: SAFE_PROTOBUFJS_VERSION,
-    },
   });
 
   const audit = assertAuditZero(fixture);
@@ -172,7 +163,11 @@ function verifySafePackedRuntime(tempRoot, tarball) {
   const runner = join(fixture, "verify-safe.mjs");
   writeFileSync(
     runner,
-    `import { LocalEmbeddingProvider } from "@jim80net/memex-core";
+    `const coreEntry = new URL(
+  "./node_modules/@jim80net/memex-openclaw/node_modules/@jim80net/memex-core/dist/index.js",
+  import.meta.url,
+);
+const { LocalEmbeddingProvider } = await import(coreEntry);
 
 const provider = new LocalEmbeddingProvider(${JSON.stringify(MODEL)}, ${JSON.stringify(
       MODEL_CACHE,
@@ -195,7 +190,15 @@ console.log(JSON.stringify({ dimensions: vector.length, finite: true, norm }));
     audit,
     embedding,
     sharpPath,
-    coreVersion: installedPackageVersion(fixture, "@jim80net/memex-core"),
+    coreVersion: installedPackageVersion(
+      fixture,
+      "node_modules",
+      "@jim80net",
+      "memex-openclaw",
+      "node_modules",
+      "@jim80net",
+      "memex-core",
+    ),
   };
 }
 

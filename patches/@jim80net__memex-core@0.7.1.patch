@@ -1,0 +1,13 @@
+diff --git a/package.json b/package.json
+index eda3c98ed2b796c3490bb591b94b95cc7a06a876..45ff67f6e7448542055ebcadb82c062dcea97871 100644
+--- a/package.json
++++ b/package.json
+@@ -39,8 +39,5 @@
+     "typescript": "^5.7.0",
+     "vitest": "^3.0.0"
+   },
+-  "optionalDependencies": {
+-    "@huggingface/transformers": "^3.8.1"
+-  },
+   "packageManager": "pnpm@8.3.1"
+ }
