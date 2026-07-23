@@ -2,13 +2,16 @@
 // This proves declared range + installed resolution match the published Core contract.
 
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const CROSS_ADAPTER_TRANSFORMERS_RANGE = "^3.8.1";
 const CROSS_ADAPTER_TRANSFORMERS_RESOLVED = "3.8.1";
-const CROSS_ADAPTER_MEMEX_CORE_RANGE = "^0.7.0";
-const CROSS_ADAPTER_MEMEX_CORE_RESOLVED = "0.7.0";
+const CROSS_ADAPTER_MEMEX_CORE_RANGE = "^0.7.1";
+const CROSS_ADAPTER_MEMEX_CORE_RESOLVED = "0.7.1";
+const SAFE_SHARP_RESOLVED = "0.35.3";
 
 function readJson(relFromRepoRoot: string): Record<string, unknown> {
   const url = new URL(`../${relFromRepoRoot}`, import.meta.url);
@@ -56,6 +59,22 @@ describe("cross-adapter version-pin alignment (G3 openclaw)", () => {
       const coreRange = depRange(corePkg, "@huggingface/transformers");
       expect(coreRange, "@huggingface/transformers missing from memex-core pkg").toBeDefined();
       expect(depRange(openclawPkg, "@huggingface/transformers")).toBe(coreRange);
+    });
+
+    it("the application override resolves Transformers to safe Sharp", () => {
+      const pnpmConfig = openclawPkg.pnpm as { overrides?: Record<string, string> } | undefined;
+      expect(pnpmConfig?.overrides?.["@huggingface/transformers>sharp"]).toBe(SAFE_SHARP_RESOLVED);
+
+      const transformersPackageUrl = new URL(
+        "../node_modules/@huggingface/transformers/package.json",
+        import.meta.url,
+      );
+      const requireFromTransformers = createRequire(transformersPackageUrl);
+      const sharpEntry = requireFromTransformers.resolve("sharp");
+      const sharpPkg = JSON.parse(
+        readFileSync(join(dirname(sharpEntry), "..", "package.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      expect(sharpPkg.version).toBe(SAFE_SHARP_RESOLVED);
     });
   });
 });
