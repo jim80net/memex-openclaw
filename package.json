@@ -35,6 +35,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "verify:core-security": "node scripts/verify-core-security.mjs",
     "project-rules": "node --experimental-strip-types scripts/project-rules.mjs",
     "prepare": "lefthook install"
   },
@@ -49,6 +50,23 @@
     "@huggingface/transformers": "^3.8.1"
   },
   "dependencies": {
-    "@jim80net/memex-core": "^0.7.0"
+    "@huggingface/jinja": "^0.5.3",
+    "@jim80net/memex-core": "^0.7.1",
+    "onnxruntime-node": "1.21.0",
+    "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
+    "sharp": "0.35.3"
+  },
+  "bundleDependencies": [
+    "@huggingface/transformers",
+    "@jim80net/memex-core"
+  ],
+  "pnpm": {
+    "overrides": {
+      "@huggingface/transformers>sharp": "0.35.3"
+    },
+    "patchedDependencies": {
+      "@huggingface/transformers@3.8.1": "patches/@huggingface__transformers@3.8.1.patch",
+      "@jim80net/memex-core@0.7.1": "patches/@jim80net__memex-core@0.7.1.patch"
+    }
   }
 }
