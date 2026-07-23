@@ -1,6 +1,5 @@
-// Cross-adapter version-pin alignment guard — G3 wave (core 0.6.0 freeze).
-// OpenClaw pin jump ^0.3.1 → ^0.6.0 is the largest in the seat matrix; this
-// test proves declared range + installed resolution match the freeze.
+// Cross-adapter version-pin alignment guard.
+// This proves declared range + installed resolution match the published Core contract.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -8,9 +7,8 @@ import { describe, expect, it } from "vitest";
 
 const CROSS_ADAPTER_TRANSFORMERS_RANGE = "^3.8.1";
 const CROSS_ADAPTER_TRANSFORMERS_RESOLVED = "3.8.1";
-// Freeze: memex-core@0.6.0 shared-origin primitives (G3 / flotilla freeze-SHA).
-const CROSS_ADAPTER_MEMEX_CORE_RANGE = "^0.6.0";
-const CROSS_ADAPTER_MEMEX_CORE_RESOLVED = "0.6.1";
+const CROSS_ADAPTER_MEMEX_CORE_RANGE = "^0.7.0";
+const CROSS_ADAPTER_MEMEX_CORE_RESOLVED = "0.7.0";
 
 function readJson(relFromRepoRoot: string): Record<string, unknown> {
   const url = new URL(`../${relFromRepoRoot}`, import.meta.url);
