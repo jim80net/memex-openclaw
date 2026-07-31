@@ -22,6 +22,7 @@
     "rag"
   ],
   "type": "module",
+  "packageManager": "pnpm@10.34.5",
   "openclaw": {
     "extensions": [
       "./src/index.ts"
@@ -35,6 +36,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "verify:lock-policy": "node scripts/verify-lock-policy.mjs",
     "verify:core-security": "node scripts/verify-core-security.mjs",
     "project-rules": "node --experimental-strip-types scripts/project-rules.mjs",
     "prepare": "lefthook install"

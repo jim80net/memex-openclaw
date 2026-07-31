@@ -9,12 +9,11 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -22,6 +21,12 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Enforce package manager and lockfile policy
+        run: pnpm verify:lock-policy
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod
 
       - name: Format check
         run: pnpm format:check
@@ -34,3 +39,12 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Cache local embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/memex-openclaw-models
+          key: memex-openclaw-${{ runner.os }}-all-MiniLM-L6-v2
+
+      - name: Verify packed runtime security
+        run: pnpm verify:core-security
