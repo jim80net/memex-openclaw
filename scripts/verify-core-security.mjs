@@ -1,18 +1,29 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const CORE_VERSION = "0.7.1";
+const CORE_VERSION = "0.7.3";
 const TRANSFORMERS_VERSION = "3.8.1";
 const SAFE_SHARP_VERSION = "0.35.3";
+const SAFE_PROTOBUF_VERSION = "7.6.5";
+const SAFE_PROTOBUF_UTF8_VERSION = "1.1.2";
+const SAFE_TAR_VERSION = "7.5.22";
 const MODEL = "Xenova/all-MiniLM-L6-v2";
 const MODEL_CACHE =
-  process.env.MEMEX_MODEL_CACHE_DIR ?? join(homedir(), ".cache", "memex-openclaw-models");
+  process.env.MEMEX_MODEL_CACHE_DIR ??
+  join(homedir(), ".cache", "memex-openclaw-models");
 
 function run(command, args, cwd, options = {}) {
   const result = spawnSync(command, args, {
@@ -36,7 +47,9 @@ function writeJson(path, value) {
 }
 
 function installedPackageVersion(root, ...packagePath) {
-  const manifest = JSON.parse(readFileSync(join(root, ...packagePath, "package.json"), "utf8"));
+  const manifest = JSON.parse(
+    readFileSync(join(root, ...packagePath, "package.json"), "utf8"),
+  );
   return manifest.version;
 }
 
@@ -51,11 +64,42 @@ function assertSingleSharp(root, expectedVersion) {
     ),
   ];
   if (installs.length !== 1) {
-    throw new Error(`expected exactly one Sharp installation, found ${installs.length}`);
+    throw new Error(
+      `expected exactly one Sharp installation, found ${installs.length}`,
+    );
   }
-  const version = JSON.parse(readFileSync(join(installs[0], "package.json"), "utf8")).version;
+  const version = JSON.parse(
+    readFileSync(join(installs[0], "package.json"), "utf8"),
+  ).version;
   if (version !== expectedVersion) {
     throw new Error(`expected Sharp ${expectedVersion}, found ${version}`);
+  }
+  return installs[0];
+}
+
+function assertSinglePackageVersion(root, packageName, expectedVersion) {
+  const output = run("npm", ["ls", packageName, "--all", "--parseable"], root);
+  const suffix = join("node_modules", ...packageName.split("/"));
+  const installs = [
+    ...new Set(
+      output
+        .split(/\r?\n/)
+        .filter((line) => line.endsWith(suffix))
+        .map((line) => realpathSync(line)),
+    ),
+  ];
+  if (installs.length !== 1) {
+    throw new Error(
+      `expected exactly one ${packageName} installation, found ${installs.length}`,
+    );
+  }
+  const version = JSON.parse(
+    readFileSync(join(installs[0], "package.json"), "utf8"),
+  ).version;
+  if (version !== expectedVersion) {
+    throw new Error(
+      `expected ${packageName} ${expectedVersion}, found ${version}`,
+    );
   }
   return installs[0];
 }
@@ -88,7 +132,11 @@ function packAdapter(destination) {
     throw new Error(`npm pack did not return JSON: ${output}`);
   }
   const packed = JSON.parse(output.slice(jsonStart));
-  if (!Array.isArray(packed) || packed.length !== 1 || typeof packed[0].filename !== "string") {
+  if (
+    !Array.isArray(packed) ||
+    packed.length !== 1 ||
+    typeof packed[0].filename !== "string"
+  ) {
     throw new Error(`unexpected npm pack response: ${output}`);
   }
   return join(destination, packed[0].filename);
@@ -160,6 +208,19 @@ function verifySafePackedRuntime(tempRoot, tarball) {
 
   const audit = assertAuditZero(fixture);
   const sharpPath = assertSingleSharp(fixture, SAFE_SHARP_VERSION);
+  const remediatedDependencies = {
+    protobufjs: assertSinglePackageVersion(
+      fixture,
+      "protobufjs",
+      SAFE_PROTOBUF_VERSION,
+    ),
+    protobufUtf8: assertSinglePackageVersion(
+      fixture,
+      "@protobufjs/utf8",
+      SAFE_PROTOBUF_UTF8_VERSION,
+    ),
+    tar: assertSinglePackageVersion(fixture, "tar", SAFE_TAR_VERSION),
+  };
   const runner = join(fixture, "verify-safe.mjs");
   writeFileSync(
     runner,
@@ -189,6 +250,7 @@ console.log(JSON.stringify({ dimensions: vector.length, finite: true, norm }));
   return {
     audit,
     embedding,
+    remediatedDependencies,
     sharpPath,
     coreVersion: installedPackageVersion(
       fixture,

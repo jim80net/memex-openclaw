@@ -6,14 +6,17 @@ settings:
 
 overrides:
   '@huggingface/transformers>sharp': 0.35.3
+  '@protobufjs/utf8': 1.1.2
+  protobufjs: 7.6.5
+  tar: 7.5.22
 
 patchedDependencies:
   '@huggingface/transformers@3.8.1':
     hash: 48923c013b66b910d4f6f880f3672b6cbce81c575cc84f33aeb95237539a0c22
     path: patches/@huggingface__transformers@3.8.1.patch
-  '@jim80net/memex-core@0.7.1':
-    hash: 946295d6bc9acb0e6165d5d017a3bf04069b84e674ca1d0ea1696971a646ffd6
-    path: patches/@jim80net__memex-core@0.7.1.patch
+  '@jim80net/memex-core@0.7.3':
+    hash: 4628976ac587c2f73443a17b4481a413518b0c438b6deb4b3551fe7b97d6dabc
+    path: patches/@jim80net__memex-core@0.7.3.patch
 
 importers:
 
@@ -23,8 +26,8 @@ importers:
         specifier: ^0.5.3
         version: 0.5.6
       '@jim80net/memex-core':
-        specifier: ^0.7.1
-        version: 0.7.1(patch_hash=946295d6bc9acb0e6165d5d017a3bf04069b84e674ca1d0ea1696971a646ffd6)(@types/node@25.5.0)
+        specifier: ^0.7.3
+        version: 0.7.3(patch_hash=4628976ac587c2f73443a17b4481a413518b0c438b6deb4b3551fe7b97d6dabc)(@types/node@25.5.0)
       onnxruntime-node:
         specifier: 1.21.0
         version: 1.21.0
@@ -296,8 +299,8 @@ packages:
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
 
-  '@jim80net/memex-core@0.7.1':
-    resolution: {integrity: sha512-WczqVO4PkNQmGUdX+XXPkeVRb4yH0wKPGMFgB4ff2fjz5YOQXBFD9bAmFwzH8v21OoW6Kz3JQ7lpEOpdbKQbaQ==}
+  '@jim80net/memex-core@0.7.3':
+    resolution: {integrity: sha512-xbSs9H54ljeepDPdBJ0FJUi9OmKSGjxPPe3mYprZ7WMsfxuy+xei5PITVut/+4Py87S6mg8cEIL461pTSBCvfA==}
     hasBin: true
 
   '@jridgewell/sourcemap-codec@1.5.5':
@@ -820,8 +823,8 @@ packages:
   std-env@4.0.0:
     resolution: {integrity: sha512-zUMPtQ/HBY3/50VbpkupYHbRroTRZJPRLvreamgErJVys0ceuzMkD44J/QjqhHjOzK42GQ3QZIeFG1OYfOtKqQ==}
 
-  tar@7.5.21:
-    resolution: {integrity: sha512-XdhtCvlMywwxpCW8YEq3lOXBJpUPTR2OHHcwLPO3HwsJqOHa2Ok/oJ7ruGzp+JrKoRPVCzJwAdEjqLW/vNRPHA==}
+  tar@7.5.22:
+    resolution: {integrity: sha512-MFO/QzvtAOmJbkhOaCTvbGcFN9L9b+JunIsDwaKljSOdcLMea3NJ1k9Usz/rjdfSXTq4dfzfeS7W4p4YOAAHeA==}
     engines: {node: '>=18'}
 
   tinybench@2.9.0:
@@ -1116,7 +1119,7 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
-  '@jim80net/memex-core@0.7.1(patch_hash=946295d6bc9acb0e6165d5d017a3bf04069b84e674ca1d0ea1696971a646ffd6)(@types/node@25.5.0)':
+  '@jim80net/memex-core@0.7.3(patch_hash=4628976ac587c2f73443a17b4481a413518b0c438b6deb4b3551fe7b97d6dabc)(@types/node@25.5.0)':
     optionalDependencies:
       '@huggingface/transformers': 3.8.1(patch_hash=48923c013b66b910d4f6f880f3672b6cbce81c575cc84f33aeb95237539a0c22)(@types/node@25.5.0)
     transitivePeerDependencies:
@@ -1462,7 +1465,7 @@ snapshots:
     dependencies:
       global-agent: 3.0.0
       onnxruntime-common: 1.21.0
-      tar: 7.5.21
+      tar: 7.5.22
 
   onnxruntime-web@1.22.0-dev.20250409-89f8206ba4:
     dependencies:
@@ -1582,7 +1585,7 @@ snapshots:
 
   std-env@4.0.0: {}
 
-  tar@7.5.21:
+  tar@7.5.22:
     dependencies:
       '@isaacs/fs-minipass': 4.0.1
       chownr: 3.0.0

@@ -1,13 +1,14 @@
 diff --git a/package.json b/package.json
-index eda3c98ed2b796c3490bb591b94b95cc7a06a876..45ff67f6e7448542055ebcadb82c062dcea97871 100644
+index 951d6cf..06f7ec8 100644
 --- a/package.json
 +++ b/package.json
-@@ -39,8 +39,5 @@
+@@ -41,9 +41,6 @@
      "typescript": "^5.7.0",
      "vitest": "^3.0.0"
    },
 -  "optionalDependencies": {
 -    "@huggingface/transformers": "^3.8.1"
 -  },
-   "packageManager": "pnpm@8.3.1"
- }
+   "pnpm": {
+     "overrides": {
+       "@protobufjs/utf8": "1.1.2",

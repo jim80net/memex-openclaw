@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@huggingface/jinja": "^0.5.3",
-    "@jim80net/memex-core": "^0.7.1",
+    "@jim80net/memex-core": "^0.7.3",
     "onnxruntime-node": "1.21.0",
     "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
     "sharp": "0.35.3"
@@ -64,11 +64,14 @@
   ],
   "pnpm": {
     "overrides": {
-      "@huggingface/transformers>sharp": "0.35.3"
+      "@huggingface/transformers>sharp": "0.35.3",
+      "@protobufjs/utf8": "1.1.2",
+      "protobufjs": "7.6.5",
+      "tar": "7.5.22"
     },
     "patchedDependencies": {
       "@huggingface/transformers@3.8.1": "patches/@huggingface__transformers@3.8.1.patch",
-      "@jim80net/memex-core@0.7.1": "patches/@jim80net__memex-core@0.7.1.patch"
+      "@jim80net/memex-core@0.7.3": "patches/@jim80net__memex-core@0.7.3.patch"
     }
   }
 }
