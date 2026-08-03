@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 
 const CROSS_ADAPTER_TRANSFORMERS_RANGE = "^3.8.1";
 const CROSS_ADAPTER_TRANSFORMERS_RESOLVED = "3.8.1";
-const CROSS_ADAPTER_MEMEX_CORE_RANGE = "^0.7.1";
-const CROSS_ADAPTER_MEMEX_CORE_RESOLVED = "0.7.1";
+const CROSS_ADAPTER_MEMEX_CORE_RANGE = "^0.7.3";
+const CROSS_ADAPTER_MEMEX_CORE_RESOLVED = "0.7.3";
 const SAFE_SHARP_RESOLVED = "0.35.3";
 
 function readJson(relFromRepoRoot: string): Record<string, unknown> {
@@ -63,12 +63,19 @@ describe("cross-adapter version-pin alignment (G3 openclaw)", () => {
       ]);
       const pnpmConfig = openclawPkg.pnpm as
         | {
+            overrides?: Record<string, string>;
             patchedDependencies?: Record<string, string>;
           }
         | undefined;
+      expect(pnpmConfig?.overrides).toEqual({
+        "@huggingface/transformers>sharp": "0.35.3",
+        "@protobufjs/utf8": "1.1.2",
+        protobufjs: "7.6.5",
+        tar: "7.5.22",
+      });
       expect(pnpmConfig?.patchedDependencies).toEqual({
         "@huggingface/transformers@3.8.1": "patches/@huggingface__transformers@3.8.1.patch",
-        "@jim80net/memex-core@0.7.1": "patches/@jim80net__memex-core@0.7.1.patch",
+        "@jim80net/memex-core@0.7.3": "patches/@jim80net__memex-core@0.7.3.patch",
       });
     });
 
