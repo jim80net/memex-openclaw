@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const API_VERSION = "2022-11-28";
 const DEFAULT_ATTEMPTS = 30;
-const DEFAULT_INTERVAL_MS = 2_000;
+const DEFAULT_INTERVAL_MS = 10_000;
 
 function requiredString(value, name) {
   if (typeof value !== "string" || value.trim() === "") {
