@@ -34,7 +34,8 @@ export function selectHeldPullRequestRun(runs, expected) {
       Number.isInteger(run.id) &&
       run.id > 0 &&
       run.event === "pull_request" &&
-      run.status === "action_required" &&
+      run.status === "completed" &&
+      run.conclusion === "action_required" &&
       run.head_branch === expected.headBranch &&
       run.head_sha === expected.headSha,
   );

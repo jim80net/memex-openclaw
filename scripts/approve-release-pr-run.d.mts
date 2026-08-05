@@ -2,6 +2,7 @@ export type WorkflowRun = {
   id: number;
   event: string;
   status: string;
+  conclusion: string | null;
   head_branch: string;
   head_sha: string;
 };
