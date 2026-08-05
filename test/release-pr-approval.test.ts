@@ -29,8 +29,12 @@ function json(value: unknown, status = 200): Response {
   });
 }
 
-function api(workflowRuns: WorkflowRun[]) {
+function api(workflowRuns: WorkflowRun[] | WorkflowRun[][]) {
   const requests: Array<{ method: string; url: string }> = [];
+  const responses = Array.isArray(workflowRuns[0])
+    ? (workflowRuns as WorkflowRun[][])
+    : [workflowRuns as WorkflowRun[]];
+  let poll = 0;
   const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -39,7 +43,9 @@ function api(workflowRuns: WorkflowRun[]) {
       return json({ head: { ref: headBranch, sha: headSha, repo: { full_name: repository } } });
     }
     if (url.includes("/actions/workflows/ci.yml/runs?")) {
-      return json({ workflow_runs: workflowRuns });
+      const response = responses[Math.min(poll, responses.length - 1)] ?? [];
+      poll += 1;
+      return json({ workflow_runs: response });
     }
     if (url.endsWith("/actions/runs/42/approve") && method === "POST") {
       return new Response(null, { status: 201 });
@@ -78,6 +84,32 @@ describe("release PR held-run approval", () => {
     );
     expect(runsRequest?.url).toContain("event=pull_request");
     expect(runsRequest?.url).toContain("status=action_required");
+  });
+
+  it("approves a held run that materializes late in the widened polling window", async () => {
+    const delayedResponses: WorkflowRun[][] = Array.from({ length: 29 }, () => []);
+    delayedResponses.push([run()]);
+    const client = api(delayedResponses);
+    const sleep = vi.fn(async () => {});
+
+    const result = await approveReleasePullRequestRun({
+      releasePr,
+      repository,
+      token: "test-token",
+      apiUrl: "https://api.github.test",
+      fetchImpl: client.fetchImpl,
+      sleep,
+    });
+
+    expect(result).toEqual({ runId: 42, headBranch, headSha });
+    expect(sleep).toHaveBeenCalledTimes(29);
+    expect(sleep).toHaveBeenCalledWith(10_000);
+    expect(
+      client.requests.filter(
+        ({ method, url }) => method === "GET" && url.includes("/actions/workflows/ci.yml/runs?"),
+      ),
+    ).toHaveLength(30);
+    expect(client.requests.filter(({ method }) => method === "POST")).toHaveLength(1);
   });
 
   it("fails the planted dispatch-only negative control", async () => {
