@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/jim80net/memex-openclaw/compare/v0.8.0...v0.8.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* match live held-run payload shape ([#31](https://github.com/jim80net/memex-openclaw/issues/31)) ([eb3ae12](https://github.com/jim80net/memex-openclaw/commit/eb3ae12746753323657867b8f3710a3cfa7a2911))
+* widen release run approval window ([#28](https://github.com/jim80net/memex-openclaw/issues/28)) ([8f700a1](https://github.com/jim80net/memex-openclaw/commit/8f700a127c07f225fce6b750d9f19b95ddd7a603))
+
 ## [0.8.0](https://github.com/jim80net/memex-openclaw/compare/v0.7.0...v0.8.0) (2026-07-23)
 
 
