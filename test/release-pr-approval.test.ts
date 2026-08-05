@@ -15,7 +15,8 @@ function run(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return {
     id: 42,
     event: "pull_request",
-    status: "action_required",
+    status: "completed",
+    conclusion: "action_required",
     head_branch: headBranch,
     head_sha: headSha,
     ...overrides,
@@ -56,7 +57,7 @@ function api(workflowRuns: WorkflowRun[] | WorkflowRun[][]) {
 }
 
 describe("release PR held-run approval", () => {
-  it("approves only the exact held pull_request CI run", async () => {
+  it("approves only the exact measured completed/action_required pull_request CI run", async () => {
     const client = api([
       run({ id: 7, event: "workflow_dispatch" }),
       run({ id: 8, head_sha: "stale" }),
@@ -125,6 +126,57 @@ describe("release PR held-run approval", () => {
         maxAttempts: 1,
       }),
     ).rejects.toThrow("workflow_dispatch runs are intentionally ineligible");
+    expect(client.requests.some(({ method }) => method === "POST")).toBe(false);
+  });
+
+  it("rejects an exact completed/success run without approving it", async () => {
+    const client = api([run({ conclusion: "success" })]);
+
+    await expect(
+      approveReleasePullRequestRun({
+        releasePr,
+        repository,
+        token: "test-token",
+        apiUrl: "https://api.github.test",
+        fetchImpl: client.fetchImpl,
+        maxAttempts: 1,
+      }),
+    ).rejects.toThrow("no held pull_request CI run appeared");
+    expect(client.requests.some(({ method }) => method === "POST")).toBe(false);
+  });
+
+  it.each([
+    ["failure", "failure"],
+    ["missing", null],
+  ])("rejects an exact run with %s conclusion", async (_label, conclusion) => {
+    const client = api([run({ conclusion })]);
+
+    await expect(
+      approveReleasePullRequestRun({
+        releasePr,
+        repository,
+        token: "test-token",
+        apiUrl: "https://api.github.test",
+        fetchImpl: client.fetchImpl,
+        maxAttempts: 1,
+      }),
+    ).rejects.toThrow("no held pull_request CI run appeared");
+    expect(client.requests.some(({ method }) => method === "POST")).toBe(false);
+  });
+
+  it("rejects the former status-only model without approving it", async () => {
+    const client = api([run({ status: "action_required", conclusion: null })]);
+
+    await expect(
+      approveReleasePullRequestRun({
+        releasePr,
+        repository,
+        token: "test-token",
+        apiUrl: "https://api.github.test",
+        fetchImpl: client.fetchImpl,
+        maxAttempts: 1,
+      }),
+    ).rejects.toThrow("no held pull_request CI run appeared");
     expect(client.requests.some(({ method }) => method === "POST")).toBe(false);
   });
 
